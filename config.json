@@ -1,34 +1,60 @@
 {
   "default_parameters": {
     "base_load": 100.0,
+    "base_load_note": "机组负荷率(%) - 100%表示满负荷运行",
     "base_temperature": 25.0,
+    "base_temperature_note": "当地气温(℃) - 环境温度基准值",
     "base_sea_temperature": 19.0,
+    "base_sea_temperature_note": "海水温度(℃) - 用于海水换热系统的基准温度",
     "base_pressure": 16.7,
+    "base_pressure_note": "基准压力(MPa) - 超临界机组典型蒸汽压力",
     "base_humidity": 60.0,
+    "base_humidity_note": "基准湿度(%) - 环境湿度基准值",
     "coal_calorific_value": 20317.0,
+    "coal_calorific_value_note": "煤的发热量(kJ/kg) - 4854 kcal/kg × 4.1868",
     "coal_moisture": 8.6,
+    "coal_moisture_note": "电煤水分(%) - 煤中水分含量",
     "coal_ash": 28.54,
+    "coal_ash_note": "灰分(%) - 煤燃烧后产生的灰分比例",
     "electricity_output": 1000.0,
+    "electricity_output_note": "发电量(MWh) - 月度发电量",
     "heating_output": 500.0,
+    "heating_output_note": "供热量(GJ) - 月度供热量",
     "heating_time": 24.0,
+    "heating_time_note": "供热时间(h) - 日供热小时数",
     "heating_load": 50.0,
+    "heating_load_note": "供热负荷率(%) - 供热系统负荷比例",
     "efficiency": 0.9,
+    "efficiency_note": "锅炉效率 - 锅炉热效率",
     "管道效率": 0.98,
+    "管道效率_note": "管道效率 - 管道输送效率",
     "operation_mode": "normal",
-    "time_period": "annual"
+    "operation_mode_note": "运行工况 - normal/peak/low/heating",
+    "time_period": "annual",
+    "time_period_note": "时间周期 - annual/monthly/daily"
   },
   "calculation_settings": {
     "enable_heating_correction": true,
+    "enable_heating_correction_note": "启用供热修正 - 是否计算供热对煤耗的影响",
     "enable_temperature_correction": true,
+    "enable_temperature_correction_note": "启用温度修正 - 是否计算温度对煤耗的影响",
     "enable_pressure_correction": true,
+    "enable_pressure_correction_note": "启用压力修正 - 是否计算压力对煤耗的影响",
     "enable_humidity_correction": true,
+    "enable_humidity_correction_note": "启用湿度修正 - 是否计算湿度对煤耗的影响",
     "enable_steam_parameter_correction": true,
-    "enable_fuel_correction": true
+    "enable_steam_parameter_correction_note": "启用蒸汽参数修正 - 是否计算蒸汽参数对煤耗的影响",
+    "enable_fuel_correction": true,
+    "enable_fuel_correction_note": "启用燃料修正 - 是否计算燃料特性对煤耗的影响"
   },
   "output_settings": {
     "export_excel": true,
+    "export_excel_note": "导出Excel - 是否生成Excel格式结果",
     "export_csv": true,
+    "export_csv_note": "导出CSV - 是否生成CSV格式结果",
     "generate_charts": true,
-    "chart_types": ["bar", "pie"]
+    "generate_charts_note": "生成图表 - 是否生成可视化图表",
+    "chart_types": ["bar", "pie"],
+    "chart_types_note": "图表类型 - bar柱状图/pie饼图"
   }
 }
