@@ -1,0 +1,31 @@
+{
+  "default_parameters": {
+    "base_load": 100.0,
+    "base_temperature": 25.0,
+    "base_pressure": 16.7,
+    "base_humidity": 60.0,
+    "coal_calorific_value": 29306.0,
+    "electricity_output": 1000.0,
+    "heating_output": 500.0,
+    "heating_time": 24.0,
+    "heating_load": 50.0,
+    "efficiency": 0.9,
+    "管道效率": 0.98,
+    "operation_mode": "normal",
+    "time_period": "annual"
+  },
+  "calculation_settings": {
+    "enable_heating_correction": true,
+    "enable_temperature_correction": true,
+    "enable_pressure_correction": true,
+    "enable_humidity_correction": true,
+    "enable_steam_parameter_correction": true,
+    "enable_fuel_correction": true
+  },
+  "output_settings": {
+    "export_excel": true,
+    "export_csv": true,
+    "generate_charts": true,
+    "chart_types": ["bar", "pie"]
+  }
+}
