@@ -2,6 +2,7 @@ import pandas as pd
 import openpyxl
 from typing import Dict, List, Optional, Any
 import os
+from .utils import load_parameters
 
 class InputHandler:
     """
@@ -10,8 +11,8 @@ class InputHandler:
     """
     
     def __init__(self):
-        # 默认参数值
-        self.default_parameters = {
+        # 硬编码的默认参数值（作为后备）
+        self.fallback_parameters = {
             # 基本参数
             'base_load': 100.0,  # 机组负荷率(%)
             'base_temperature': 25.0,  # 当地气温(℃)
@@ -36,6 +37,35 @@ class InputHandler:
             'efficiency': 0.9,  # 锅炉效率
             '管道效率': 0.98,  # 管道效率
         }
+        
+        # 从config.json加载默认参数
+        self.default_parameters = self._load_config()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """
+        从config.json加载配置参数
+        
+        Returns:
+            配置参数字典
+        """
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+        
+        try:
+            if os.path.exists(config_path):
+                config_data = load_parameters(config_path)
+                # 提取default_parameters部分
+                if 'default_parameters' in config_data:
+                    # 过滤掉_note字段（只保留实际参数）
+                    params = {}
+                    for key, value in config_data['default_parameters'].items():
+                        if not key.endswith('_note'):
+                            params[key] = value
+                    return params
+        except Exception as e:
+            print(f"警告: 从config.json加载配置失败，使用默认值: {e}")
+        
+        # 如果加载失败，返回后备默认参数
+        return self.fallback_parameters.copy()
     
     def get_user_input(self, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
