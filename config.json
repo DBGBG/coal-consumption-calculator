@@ -2,9 +2,12 @@
   "default_parameters": {
     "base_load": 100.0,
     "base_temperature": 25.0,
+    "base_sea_temperature": 19.0,
     "base_pressure": 16.7,
     "base_humidity": 60.0,
-    "coal_calorific_value": 29306.0,
+    "coal_calorific_value": 20317.0,
+    "coal_moisture": 8.6,
+    "coal_ash": 28.54,
     "electricity_output": 1000.0,
     "heating_output": 500.0,
     "heating_time": 24.0,

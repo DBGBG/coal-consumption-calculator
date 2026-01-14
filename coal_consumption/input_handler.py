@@ -13,11 +13,16 @@ class InputHandler:
         # 默认参数值
         self.default_parameters = {
             # 基本参数
-            'base_load': 100.0,  # 基准负荷率(%)
-            'base_temperature': 25.0,  # 基准温度(℃)
+            'base_load': 100.0,  # 机组负荷率(%)
+            'base_temperature': 25.0,  # 当地气温(℃)
+            'base_sea_temperature': 19.0,  # 海水温度(℃)
             'base_pressure': 16.7,  # 基准压力(MPa)
-            'base_humidity': 60.0,  # 基准湿度(%).
-            'coal_calorific_value': 29306.0,  # 煤的发热量(kJ/kg)
+            'base_humidity': 60.0,  # 基准湿度(%)
+            'coal_calorific_value': 20317.0,  # 煤的发热量(kJ/kg) - 4854 kcal/kg * 4.1868
+            
+            # 煤质参数
+            'coal_moisture': 8.6,  # 电煤水分(%)
+            'coal_ash': 28.54,  # 灰分(%)
             
             # 供热参数
             'heating_time': 24.0,  # 供热时间(h)
