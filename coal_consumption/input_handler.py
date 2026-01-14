@@ -11,8 +11,8 @@ class InputHandler:
     """
     
     def __init__(self):
-        # 硬编码的默认参数值（作为后备）
-        self.fallback_parameters = {
+        # 默认参数值
+        self.default_parameters = {
             # 基本参数
             'base_load': 100.0,  # 机组负荷率(%)
             'base_temperature': 25.0,  # 当地气温(℃)
@@ -38,8 +38,8 @@ class InputHandler:
             '管道效率': 0.98,  # 管道效率
         }
         
-        # 从config.json加载默认参数
-        self.default_parameters = self._load_config()
+        # 从config.json加载默认参数（已注释，使用硬编码）
+        # self.default_parameters = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
         """
