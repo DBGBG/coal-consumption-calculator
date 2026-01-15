@@ -2,7 +2,7 @@ import pandas as pd
 import openpyxl
 from typing import Dict, List, Optional, Any
 import os
-from .utils import load_parameters
+from utils import load_parameters
 
 class InputHandler:
     """
@@ -19,7 +19,7 @@ class InputHandler:
             'base_sea_temperature': 19.0,  # 海水温度(℃)
             'base_pressure': 16.7,  # 基准压力(MPa)
             'base_humidity': 60.0,  # 基准湿度(%)
-            'coal_calorific_value': 20317.0,  # 煤的发热量(kJ/kg) - 4854 kcal/kg * 4.1868
+            'coal_calorific_value': 4854.0,  # 煤的发热量(kcal/kg)
             
             # 煤质参数
             'coal_moisture': 8.6,  # 电煤水分(%)
@@ -35,7 +35,6 @@ class InputHandler:
             
             # 其他参数
             'efficiency': 0.9,  # 锅炉效率
-            '管道效率': 0.98,  # 管道效率
         }
         
         # 从config.json加载默认参数（已注释，使用硬编码）
@@ -126,6 +125,109 @@ class InputHandler:
             print(f"从Excel加载参数时出错: {e}")
             return self.default_parameters
     
+    def load_benchmark_and_monthly_data(self, file_path: str, sheet_name: str = '25年对比') -> Dict[str, Any]:
+        """
+        从Excel文件加载基准数据和各月份数据
+        
+        Args:
+            file_path: Excel文件路径
+            sheet_name: 工作表名称（默认"25年对比"）
+            
+        Returns:
+            包含基准数据和各月份数据的字典
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Excel文件不存在: {file_path}")
+        
+        try:
+            # 加载Excel文件
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            ws = wb[sheet_name]
+            
+            # 解析Excel结构
+            # 列D: 基准数据
+            # 列F-H: 1月数据
+            # 列J-L: 2月数据
+            # 每一行代表一个影响因素
+            
+            # 数据结构:
+            # {
+            #     'benchmark': {
+            #         '海水温度': 19,
+            #         '当地气温': 25,
+            #         ...
+            #     },
+            #     'months': {
+            #         '1月': {
+            #             '海水温度': 6.15,
+            #             '当地气温': 15,
+            #             ...
+            #         },
+            #         '2月': {
+            #             '海水温度': 4.998,
+            #             '当地气温': 15,
+            #             ...
+            #         }
+            #     }
+            # }
+            
+            result = {
+                'benchmark': {},
+                'months': {}
+            }
+            
+            # 影响因素映射
+            factor_mapping = {
+                4: '海水温度',  # 行4
+                5: '当地气温',  # 行5
+                6: '煤种热值',  # 行6
+                7: '电煤水分',  # 行7
+                8: '灰分',      # 行8
+                9: '发电量',     # 行9
+                11: '机组负荷率', # 行11
+                16: '供电基准煤耗', # 行16
+                17: '2#机组发电量', # 行17
+                19: '2#机组负荷率', # 行19
+                22: '2#机组供电基准煤耗' # 行22
+            }
+            
+            # 基准数据列（D列，第4列）
+            BENCHMARK_COL = 4
+            
+            # 月份数据列映射
+            month_columns = {
+                '1月': {'data': 6, 'factor': 7},  # 1月数据在F列(6)，影响系数在G列(7)
+                '2月': {'data': 8, 'factor': 9},  # 2月数据在H列(8)，影响系数在I列(9)
+                # 可根据需要添加更多月份
+            }
+            
+            # 读取基准数据
+            for row_num, factor_name in factor_mapping.items():
+                cell = ws.cell(row=row_num, column=BENCHMARK_COL)
+                if cell.value is not None:
+                    # 跳过单位行（如发电量的"万KWh"）
+                    if isinstance(cell.value, (int, float)):
+                        result['benchmark'][factor_name] = cell.value
+            
+            # 读取各月份数据
+            for month, columns in month_columns.items():
+                result['months'][month] = {}
+                for row_num, factor_name in factor_mapping.items():
+                    data_cell = ws.cell(row=row_num, column=columns['data'])
+                    if data_cell.value is not None and isinstance(data_cell.value, (int, float)):
+                        result['months'][month][factor_name] = data_cell.value
+                    
+                    # 读取影响煤耗系数
+                    factor_cell = ws.cell(row=row_num, column=columns['factor'])
+                    if factor_cell.value is not None and isinstance(factor_cell.value, (int, float)):
+                        result['months'][month][f'{factor_name}_影响系数'] = factor_cell.value
+            
+            return result
+            
+        except Exception as e:
+            print(f"从Excel加载基准和月份数据时出错: {e}")
+            raise
+    
     def validate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
         验证参数的有效性
@@ -155,9 +257,6 @@ class InputHandler:
         # 验证效率
         if 'efficiency' in parameters:
             parameters['efficiency'] = max(0, min(1, parameters['efficiency']))
-        
-        if '管道效率' in parameters:
-            parameters['管道效率'] = max(0, min(1, parameters['管道效率']))
         
         return parameters
     

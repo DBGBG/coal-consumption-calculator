@@ -1,6 +1,6 @@
 import math
 from typing import Dict, Any, Tuple, List
-from .correction_factors import CorrectionFactors
+from correction_factors import CorrectionFactors
 
 class CoalConsumptionCalculator:
     """
@@ -12,15 +12,14 @@ class CoalConsumptionCalculator:
         self.correction_factors = CorrectionFactors()
     
     def calculate_basic_coal_consumption(self, electricity_output: float, coal_calorific_value: float,
-                                        efficiency: float, pipeline_efficiency: float) -> float:
+                                        efficiency: float) -> float:
         """
         计算基本煤耗
         
         Args:
             electricity_output: 发电量(MWh)
-            coal_calorific_value: 煤的发热量(kJ/kg)
+            coal_calorific_value: 煤的发热量(kcal/kg)
             efficiency: 锅炉效率
-            pipeline_efficiency: 管道效率
             
         Returns:
             基本煤耗(g/kWh)
@@ -28,11 +27,14 @@ class CoalConsumptionCalculator:
         if electricity_output == 0:
             return 0.0
         
+        # 将kcal/kg转换为kJ/kg (1 kcal = 4.1868 kJ)
+        coal_calorific_value_kj = coal_calorific_value * 4.1868
+        
         # 修正基本煤耗计算公式
-        # 正确公式：煤耗 (g/kWh) = 3600 * 1000 / (煤的发热量 * 效率 * 管道效率)
+        # 正确公式：煤耗 (g/kWh) = 3600 * 1000 / (煤的发热量 * 效率)
         # 3600: 1kWh的能量(kJ)
         # 1000: 转换为g
-        coal_consumption_g = (3600 * 1000) / (coal_calorific_value * efficiency * pipeline_efficiency)
+        coal_consumption_g = (3600 * 1000) / (coal_calorific_value_kj * efficiency)
         
         return coal_consumption_g
     
@@ -48,26 +50,32 @@ class CoalConsumptionCalculator:
         """
         # 获取参数
         electricity_output = params.get('electricity_output', 1000.0)  # 发电量(MWh)
-        coal_calorific_value = params.get('coal_calorific_value', 29306.0)  # 煤的发热量(kJ/kg)
+        coal_calorific_value = params.get('coal_calorific_value', 4854.0)  # 煤的发热量(kcal/kg)
         efficiency = params.get('efficiency', 0.9)  # 锅炉效率
-        pipeline_efficiency = params.get('管道效率', 0.98)  # 管道效率
         
         # 计算修正因子
         corrections = self.correction_factors.calculate_comprehensive_correction(params)
         
         # 计算基本煤耗
         basic_coal_consumption = self.calculate_basic_coal_consumption(
-            electricity_output, coal_calorific_value, efficiency, pipeline_efficiency
+            electricity_output, coal_calorific_value, efficiency
         )
         
         # 应用修正因子
         benchmark_coal_consumption = basic_coal_consumption * corrections['comprehensive']
+        
+        # 计算总系数（用于与表格计算结果对比）
+        total_factor = 1.0
+        for key, value in corrections.items():
+            if key not in ['comprehensive', 'heating']:
+                total_factor *= value
         
         # 计算其他煤耗指标
         results = {
             'basic_coal_consumption': basic_coal_consumption,
             'benchmark_coal_consumption': benchmark_coal_consumption,
             'correction_factor': corrections['comprehensive'],
+            'total_correction_factor': total_factor,
         }
         
         # 添加详细的修正因子
@@ -88,13 +96,12 @@ class CoalConsumptionCalculator:
         # 获取参数
         electricity_output = params.get('electricity_output', 1000.0)  # 发电量(MWh)
         heating_output = params.get('heating_output', 500.0)  # 供热量(GJ)
-        coal_calorific_value = params.get('coal_calorific_value', 29306.0)  # 煤的发热量(kJ/kg)
+        coal_calorific_value = params.get('coal_calorific_value', 4854.0)  # 煤的发热量(kcal/kg)
         efficiency = params.get('efficiency', 0.9)  # 锅炉效率
-        pipeline_efficiency = params.get('管道效率', 0.98)  # 管道效率
         
         # 计算纯发电煤耗
         power_only_coal = self.calculate_basic_coal_consumption(
-            electricity_output, coal_calorific_value, efficiency, pipeline_efficiency
+            electricity_output, coal_calorific_value, efficiency
         )
         
         if heating_output == 0:
@@ -104,9 +111,12 @@ class CoalConsumptionCalculator:
                 'heating_impact': 0.0,
             }
         
+        # 将kcal/kg转换为kJ/kg (1 kcal = 4.1868 kJ)
+        coal_calorific_value_kj = coal_calorific_value * 4.1868
+        
         # 供热煤耗计算 (kg)
         # 1GJ = 1000000kJ
-        heating_coal = (heating_output * 1000000) / (coal_calorific_value * efficiency)
+        heating_coal = (heating_output * 1000000) / (coal_calorific_value_kj * efficiency)
         
         # 发电煤耗 (kg)
         power_coal = power_only_coal * electricity_output / 1000  # g/kWh * MWh = kg
@@ -272,3 +282,101 @@ class CoalConsumptionCalculator:
             sensitivity_results.append((value, result['benchmark_coal_consumption']))
         
         return sensitivity_results
+    
+    def calculate_comparison_with_benchmark(self, benchmark_data: Dict[str, float], 
+                                          monthly_data: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+        """
+        计算各月份数据与基准数据的对比
+        
+        Args:
+            benchmark_data: 基准数据字典
+            monthly_data: 各月份数据字典，键为月份名称，值为该月份的数据
+            
+        Returns:
+            对比结果字典
+        """
+        comparison_results = {
+            'benchmark': benchmark_data,
+            'monthly_comparisons': {}
+        }
+        
+        # 对每个月份进行对比
+        for month_name, month_data in monthly_data.items():
+            month_comparison = {
+                'monthly_data': month_data,
+                'comparisons': {}
+            }
+            
+            # 计算各参数与基准的差异和比例
+            for param_name in set(benchmark_data.keys()) & set(month_data.keys()):
+                benchmark_value = benchmark_data[param_name]
+                month_value = month_data[param_name]
+                
+                # 跳过为0的基准值（避免除以0）
+                if benchmark_value == 0:
+                    continue
+                
+                # 计算差异和比例
+                difference = month_value - benchmark_value
+                ratio = month_value / benchmark_value
+                
+                month_comparison['comparisons'][param_name] = {
+                    'benchmark': benchmark_value,
+                    'monthly': month_value,
+                    'difference': difference,
+                    'ratio': ratio
+                }
+            
+            comparison_results['monthly_comparisons'][month_name] = month_comparison
+        
+        return comparison_results
+    
+    def calculate_coal_consumption_for_monthly_data(self, benchmark_data: Dict[str, float], 
+                                                  monthly_data: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+        """
+        基于基准数据和月份数据计算煤耗
+        
+        Args:
+            benchmark_data: 基准数据字典
+            monthly_data: 各月份数据字典
+            
+        Returns:
+            计算结果字典
+        """
+        results = {
+            'benchmark_coal_consumption': 0.0,
+            'monthly_coal_consumption': {}
+        }
+        
+        # 计算基准煤耗
+        benchmark_params = {
+            'base_load': benchmark_data.get('机组负荷率', 100),
+            'base_temperature': benchmark_data.get('当地气温', 25),
+            'coal_calorific_value': benchmark_data.get('煤种热值', 4854) * 4.1868,  # 转换为kJ/kg
+            'base_pressure': 16.7,  # 默认值
+            'actual_load': benchmark_data.get('机组负荷率', 100),
+            'actual_temperature': benchmark_data.get('当地气温', 25),
+            'actual_calorific_value': benchmark_data.get('煤种热值', 4854) * 4.1868,
+            'efficiency': 0.9,
+        }
+        
+        benchmark_results = self.calculate_benchmark_coal_consumption(benchmark_params)
+        results['benchmark_coal_consumption'] = benchmark_results['benchmark_coal_consumption']
+        
+        # 计算各月份的煤耗
+        for month_name, month_data in monthly_data.items():
+            month_params = {
+                'base_load': benchmark_data.get('机组负荷率', 100),
+                'base_temperature': benchmark_data.get('当地气温', 25),
+                'coal_calorific_value': benchmark_data.get('煤种热值', 4854) * 4.1868,
+                'base_pressure': 16.7,  # 默认值
+                'actual_load': month_data.get('机组负荷率', benchmark_data.get('机组负荷率', 100)),
+                'actual_temperature': month_data.get('当地气温', benchmark_data.get('当地气温', 25)),
+                'actual_calorific_value': month_data.get('煤种热值', benchmark_data.get('煤种热值', 4854)) * 4.1868,
+                'efficiency': 0.9,
+            }
+            
+            month_results = self.calculate_benchmark_coal_consumption(month_params)
+            results['monthly_coal_consumption'][month_name] = month_results['benchmark_coal_consumption']
+        
+        return results

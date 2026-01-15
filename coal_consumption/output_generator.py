@@ -29,7 +29,8 @@ class OutputGenerator:
         report += "## 基本信息\n"
         report += f"基准煤耗: {results.get('benchmark_coal_consumption', 0):.2f} g/kWh\n"
         report += f"基本煤耗: {results.get('basic_coal_consumption', 0):.2f} g/kWh\n"
-        report += f"综合修正因子: {results.get('correction_factor', 1):.4f}\n\n"
+        report += f"综合修正因子: {results.get('correction_factor', 1):.4f}\n"
+        report += f"总修正因子: {results.get('total_correction_factor', 1):.6f}\n\n"
         
         # 修正因子详情
         report += "## 修正因子详情\n"

@@ -145,8 +145,8 @@ class CorrectionFactors:
         计算燃料修正因子
         
         Args:
-            actual_calorific_value: 实际燃料发热量(kJ/kg)
-            base_calorific_value: 基准燃料发热量(kJ/kg)
+            actual_calorific_value: 实际燃料发热量(kcal/kg)
+            base_calorific_value: 基准燃料发热量(kcal/kg)
             
         Returns:
             燃料修正因子
@@ -154,7 +154,11 @@ class CorrectionFactors:
         if base_calorific_value == 0:
             return 1.0
         
-        correction_factor = base_calorific_value / actual_calorific_value
+        # 将kcal/kg转换为kJ/kg (1 kcal = 4.1868 kJ)
+        actual_calorific_value_kj = actual_calorific_value * 4.1868
+        base_calorific_value_kj = base_calorific_value * 4.1868
+        
+        correction_factor = base_calorific_value_kj / actual_calorific_value_kj
         
         return correction_factor
     
