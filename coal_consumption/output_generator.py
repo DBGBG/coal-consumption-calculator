@@ -2,7 +2,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 from typing import Dict, Any, List, Tuple
-import json
 
 class OutputGenerator:
     """
@@ -11,7 +10,9 @@ class OutputGenerator:
     """
     
     def __init__(self):
-        pass
+        # 设置中文字体，避免图表中的中文显示问题
+        plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文显示
+        plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
     
     def generate_summary_report(self, results: Dict[str, Any]) -> str:
         """
@@ -34,10 +35,20 @@ class OutputGenerator:
         
         # 修正因子详情
         report += "## 修正因子详情\n"
-        correction_factors = ['load_factor', 'temperature', 'pressure', 'humidity', 'heating', 'steam_parameter', 'fuel']
-        for factor in correction_factors:
-            if factor in results:
-                report += f"{factor}: {results[factor]:.4f}\n"
+        factor_names = {
+            'load_factor': '负荷率修正',
+            'temperature': '温度修正',
+            'pressure': '压力修正',
+            'humidity': '湿度修正',
+            'heating': '供热修正',
+            'steam_parameter': '蒸汽参数修正',
+            'fuel': '燃料修正',
+            'sea_temperature': '海水温度修正'
+        }
+        
+        for key, display_name in factor_names.items():
+            if key in results:
+                report += f"{display_name}: {results[key]:.4f}\n"
         
         return report
     
@@ -86,6 +97,11 @@ class OutputGenerator:
             # 导出到Excel
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='煤耗计算结果', index=False)
+                
+                # 设置列宽
+                worksheet = writer.sheets['煤耗计算结果']
+                worksheet.column_dimensions['A'].width = 30
+                worksheet.column_dimensions['B'].width = 20
             
             print(f"结果已成功导出到: {file_path}")
             return True
@@ -136,7 +152,7 @@ class OutputGenerator:
             Matplotlib图表对象
         """
         # 准备数据
-        correction_factors = ['load_factor', 'temperature', 'pressure', 'humidity', 'heating', 'steam_parameter', 'fuel']
+        correction_factors = ['load_factor', 'temperature', 'pressure', 'humidity', 'heating', 'steam_parameter', 'fuel', 'sea_temperature']
         factor_names = {
             'load_factor': '负荷率修正',
             'temperature': '温度修正',
@@ -144,7 +160,8 @@ class OutputGenerator:
             'humidity': '湿度修正',
             'heating': '供热修正',
             'steam_parameter': '蒸汽参数修正',
-            'fuel': '燃料修正'
+            'fuel': '燃料修正',
+            'sea_temperature': '海水温度修正'
         }
         
         data = []
@@ -155,25 +172,43 @@ class OutputGenerator:
                 labels.append(factor_names.get(factor, factor))
         
         # 创建图表
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
         
         if chart_type == 'bar':
-            ax.bar(labels, data)
-            ax.set_title('修正因子分析')
-            ax.set_ylabel('修正因子值')
-            ax.tick_params(axis='x', rotation=45)
+            bars = ax.bar(labels, data)
+            ax.set_title('修正因子分析', fontsize=16)
+            ax.set_ylabel('修正因子值', fontsize=12)
+            ax.tick_params(axis='x', rotation=45, labelsize=10)
+            ax.tick_params(axis='y', labelsize=10)
+            
+            # 添加数值标签
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height, 
+                        f'{height:.3f}', 
+                        ha='center', va='bottom', fontsize=9)
         
         elif chart_type == 'pie':
-            # 对于饼图，使用相对值
-            relative_data = [(value - 1) * 100 for value in data]
-            ax.pie(relative_data, labels=labels, autopct='%1.1f%%')
-            ax.set_title('修正因子影响分析')
+            # 对于饼图，使用修正因子的绝对值变化（确保非负）
+            relative_data = [abs(value - 1) * 100 for value in data]
+            colors = ['#ff9999','#66b3ff','#99ff99','#ffcc99','#c2c2f0','#ffb3e6','#ff6666']
+            wedges, texts, autotexts = ax.pie(relative_data, labels=labels, autopct='%1.1f%%',
+                                              colors=colors, startangle=90)
+            ax.set_title('修正因子影响分析', fontsize=16)
+            
+            # 设置文本大小
+            for text in texts:
+                text.set_fontsize(10)
+            for autotext in autotexts:
+                autotext.set_fontsize(9)
         
         elif chart_type == 'line':
-            ax.plot(labels, data, marker='o')
-            ax.set_title('修正因子趋势')
-            ax.set_ylabel('修正因子值')
-            ax.tick_params(axis='x', rotation=45)
+            ax.plot(labels, data, marker='o', linewidth=2, markersize=8)
+            ax.set_title('修正因子趋势', fontsize=16)
+            ax.set_ylabel('修正因子值', fontsize=12)
+            ax.tick_params(axis='x', rotation=45, labelsize=10)
+            ax.tick_params(axis='y', labelsize=10)
+            ax.grid(True, linestyle='--', alpha=0.7)
         
         plt.tight_layout()
         
@@ -191,7 +226,8 @@ class OutputGenerator:
             是否保存成功
         """
         try:
-            fig.savefig(file_path)
+            fig.savefig(file_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)  # 关闭图表，释放内存
             print(f"图表已成功保存到: {file_path}")
             return True
         except Exception as e:
@@ -210,8 +246,16 @@ class OutputGenerator:
         """
         report = "# 煤耗计算比较报告\n\n"
         
+        operation_mode_names = {
+            'normal': '正常工况',
+            'peak': '峰值工况',
+            'low': '低谷工况',
+            'heating': '供热工况'
+        }
+        
         for name, results in multi_results.items():
-            report += f"## {name}\n"
+            display_name = operation_mode_names.get(name, name)
+            report += f"## {display_name}\n"
             report += f"基准煤耗: {results.get('benchmark_coal_consumption', 0):.2f} g/kWh\n"
             report += f"综合修正因子: {results.get('correction_factor', 1):.4f}\n\n"
         
@@ -243,12 +287,75 @@ class OutputGenerator:
             # 导出到Excel
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='煤耗比较', index=False)
+                
+                # 设置列宽
+                worksheet = writer.sheets['煤耗比较']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
             
             print(f"比较结果已成功导出到: {file_path}")
             return True
             
         except Exception as e:
             print(f"导出比较结果时出错: {e}")
+            return False
+    
+    def export_benchmark_comparison(self, comparison_results: Dict[str, Any], file_path: str) -> bool:
+        """
+        导出基准数据与月份数据的对比结果
+        
+        Args:
+            comparison_results: 对比结果字典
+            file_path: 导出文件路径
+            
+        Returns:
+            是否导出成功
+        """
+        try:
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                # 基准数据
+                benchmark_data = comparison_results.get('benchmark', {})
+                benchmark_df = pd.DataFrame(list(benchmark_data.items()), columns=['参数', '基准值'])
+                benchmark_df.to_excel(writer, sheet_name='基准数据', index=False)
+                
+                # 月份数据对比
+                monthly_comparisons = comparison_results.get('monthly_comparisons', {})
+                
+                for month_name, month_data in monthly_comparisons.items():
+                    comparisons = month_data.get('comparisons', {})
+                    
+                    if not comparisons:
+                        continue
+                    
+                    # 准备数据
+                    data = []
+                    for param_name, param_data in comparisons.items():
+                        row = {
+                            '参数': param_name,
+                            '基准值': param_data.get('benchmark', 0),
+                            '当月值': param_data.get('monthly', 0),
+                            '差异': param_data.get('difference', 0),
+                            '比例': param_data.get('ratio', 0)
+                        }
+                        data.append(row)
+                    
+                    df = pd.DataFrame(data)
+                    df.to_excel(writer, sheet_name=f'{month_name}对比', index=False)
+            
+            print(f"基准与月份数据对比结果已成功导出到: {file_path}")
+            return True
+            
+        except Exception as e:
+            print(f"导出基准与月份数据对比结果时出错: {e}")
             return False
     
     def display_results(self, results: Dict[str, Any]) -> None:
@@ -265,3 +372,23 @@ class OutputGenerator:
             else:
                 print(f"{key}: {value}")
         print("===================")
+    
+    def save_results_to_file(self, report: str, file_path: str) -> bool:
+        """
+        将报告保存到文件
+        
+        Args:
+            report: 报告字符串
+            file_path: 保存文件路径
+            
+        Returns:
+            是否保存成功
+        """
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(report)
+            print(f"报告已成功保存到: {file_path}")
+            return True
+        except Exception as e:
+            print(f"保存报告时出错: {e}")
+            return False

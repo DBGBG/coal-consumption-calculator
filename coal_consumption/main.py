@@ -47,15 +47,22 @@ class MainApplication:
         input_params = self.input_handler.get_user_input(parameters)
         calculation_params = self.input_handler.get_parameters_for_calculation(input_params)
         
+        # 获取计算设置
+        calculation_settings = self.input_handler.get_calculation_settings()
+        
         print("参数加载完成!")
-        print(f"基准负荷率: {calculation_params['base_load']}%")
-        print(f"基准温度: {calculation_params['base_temperature']}℃")
-        print(f"基准压力: {calculation_params['base_pressure']}MPa")
+        print(f"基准负荷率: {calculation_params['base_load']:.1f}%")
+        print(f"基准温度: {calculation_params['base_temperature']:.1f}℃")
+        print(f"基准压力: {calculation_params['base_pressure']:.1f}MPa")
+        print(f"煤的发热量: {calculation_params['coal_calorific_value']:.1f} kcal/kg")
+        print(f"基准海水温度: {calculation_params.get('base_sea_temperature', 19):.1f}℃")
         print()
         
         # 计算基准煤耗
         print("2. 计算基准煤耗...")
-        results = self.calculator.calculate_benchmark_coal_consumption(calculation_params)
+        results = self.calculator.calculate_benchmark_coal_consumption(
+            calculation_params, calculation_settings
+        )
         
         print("计算完成!")
         print()
@@ -69,17 +76,32 @@ class MainApplication:
         # 导出结果
         print("4. 导出计算结果...")
         
+        # 获取输出设置
+        output_settings = self.input_handler.get_output_settings()
+        
         # 导出到Excel
-        excel_path = "煤耗计算结果.xlsx"
-        self.output_generator.export_to_excel(results, excel_path)
+        if output_settings.get('export_excel', True):
+            excel_path = "煤耗计算结果.xlsx"
+            self.output_generator.export_to_excel(results, excel_path)
         
         # 导出到CSV
-        csv_path = "煤耗计算结果.csv"
-        self.output_generator.export_to_csv(results, csv_path)
+        if output_settings.get('export_csv', True):
+            csv_path = "煤耗计算结果.csv"
+            self.output_generator.export_to_csv(results, csv_path)
+        
+        # 生成图表
+        if output_settings.get('generate_charts', True):
+            for chart_type in output_settings.get('chart_types', ['bar']):
+                try:
+                    chart = self.output_generator.generate_chart(results, chart_type)
+                    chart_path = f"煤耗修正因子_{chart_type}.png"
+                    self.output_generator.save_chart(chart, chart_path)
+                except Exception as e:
+                    print(f"生成{chart_type}图表时出错: {e}")
         
         print()
         print("=== 计算完成 ===")
-        print(f"结果已导出到: {excel_path} 和 {csv_path}")
+        print(f"结果已导出到: 煤耗计算结果.xlsx 和 煤耗计算结果.csv")
         
         return results
     
@@ -100,15 +122,20 @@ class MainApplication:
         input_params = self.input_handler.get_user_input(parameters)
         calculation_params = self.input_handler.get_parameters_for_calculation(input_params)
         
+        # 获取计算设置
+        calculation_settings = self.input_handler.get_calculation_settings()
+        
         # 计算带供热的煤耗
-        results = self.calculator.calculate_coal_consumption_with_heating(calculation_params)
+        results = self.calculator.calculate_coal_consumption_with_heating(
+            calculation_params, calculation_settings
+        )
         
         # 生成报告
         print("计算结果:")
         print(f"纯发电煤耗: {results.get('power_only_coal_consumption', 0):.2f} g/kWh")
         print(f"综合煤耗: {results.get('combined_coal_consumption', 0):.2f} g/kWh")
         print(f"供热影响: {results.get('heating_impact', 0):.2f} g/kWh")
-        print(f"供热比例: {results.get('heating_ratio', 0):.2f}")
+        print(f"供热比例: {results.get('heating_ratio', 0):.4f}")
         
         return results
     
@@ -129,8 +156,13 @@ class MainApplication:
         input_params = self.input_handler.get_user_input(parameters)
         calculation_params = self.input_handler.get_parameters_for_calculation(input_params)
         
+        # 获取计算设置
+        calculation_settings = self.input_handler.get_calculation_settings()
+        
         # 计算不同工况的煤耗
-        results = self.calculator.calculate_coal_consumption_by_operation_mode(calculation_params)
+        results = self.calculator.calculate_coal_consumption_by_operation_mode(
+            calculation_params, calculation_settings
+        )
         
         # 生成比较报告
         comparison_report = self.output_generator.generate_comparison_report(results)
@@ -158,6 +190,12 @@ class MainApplication:
         # 确保使用正确的文件路径 - 相对于项目根目录
         excel_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), excel_file)
         
+        # 检查文件是否存在
+        if not os.path.exists(excel_file_path):
+            print(f"错误: Excel文件不存在: {excel_file_path}")
+            print("请确保在项目根目录下存在该文件")
+            return {}
+        
         # 加载基准和月份数据
         print("1. 加载基准和月份数据...")
         data = self.input_handler.load_benchmark_and_monthly_data(excel_file_path)
@@ -178,8 +216,9 @@ class MainApplication:
         
         # 计算煤耗对比
         print("3. 计算煤耗对比...")
+        calculation_settings = self.input_handler.get_calculation_settings()
         coal_consumption_results = self.calculator.calculate_coal_consumption_for_monthly_data(
-            data['benchmark'], data['months']
+            data['benchmark'], data['months'], calculation_settings
         )
         
         print("煤耗对比完成!")
@@ -227,7 +266,7 @@ class MainApplication:
         
         # 导出到Excel
         comparison_path = "基准与月份数据对比.xlsx"
-        self.output_generator.export_comparison_to_excel(combined_results, comparison_path)
+        self.output_generator.export_benchmark_comparison(coal_consumption_results, comparison_path)
         
         print()
         print("=== 对比完成 ===")
@@ -246,11 +285,12 @@ def main():
         'base_load': 100.0,
         'base_temperature': 25.0,
         'base_pressure': 16.7,
-        'base_humidity': 60.0,
+        'base_sea_temperature': 19.0,
         'coal_calorific_value': 4854.0,
         'electricity_output': 1000.0,
         'heating_output': 500.0,
         'efficiency': 0.9,
+        'heating_load': 50.0
     }
     
     # 运行主程序

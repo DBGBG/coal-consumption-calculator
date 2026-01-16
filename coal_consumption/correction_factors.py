@@ -1,5 +1,6 @@
 import math
 from typing import Dict, Any
+from utils import safe_divide, validate_numeric
 
 class CorrectionFactors:
     """
@@ -18,27 +19,27 @@ class CorrectionFactors:
         Returns:
             负荷率修正因子
         """
-        # 修正负荷率修正因子计算
-        # 负荷率修正因子应反映不同负荷下的效率变化
-        load_ratio = actual_load / base_load
+        # 使用安全除法，避免除以0
+        load_ratio = safe_divide(actual_load, base_load, 1.0)
         
-        # 负荷率修正模型
-        # 负荷率低于70%时，煤耗会显著增加
-        # 负荷率高于100%时，煤耗也会增加
+        # 负荷率修正模型 - 基于实际发电运行经验
         if load_ratio < 0.3:
-            correction_factor = 1.5
+            # 低负荷区域，效率显著下降
+            correction_factor = 1.4 - 0.6 * load_ratio
         elif load_ratio < 0.5:
-            correction_factor = 1.3
+            correction_factor = 1.25 - 0.4 * load_ratio
         elif load_ratio < 0.7:
-            correction_factor = 1.15
+            correction_factor = 1.15 - 0.2 * load_ratio
         elif load_ratio < 1.0:
             correction_factor = 1.0
         elif load_ratio < 1.1:
-            correction_factor = 1.05
+            # 超额定负荷区域，效率略有下降
+            correction_factor = 1.0 + 0.05 * (load_ratio - 1.0)
         else:
-            correction_factor = 1.15
+            correction_factor = 1.1 + 0.1 * (load_ratio - 1.1)
         
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.8, min(1.5, correction_factor))
     
     def calculate_temperature_correction(self, actual_temp: float, base_temp: float) -> float:
         """
@@ -51,12 +52,12 @@ class CorrectionFactors:
         Returns:
             温度修正因子
         """
-        # 基于Excel中的线性模型
-        # 公式: =1+0.002*(actual_temp - base_temp)
+        # 温度每变化1℃，煤耗变化约0.2%
+        temp_diff = actual_temp - base_temp
+        correction_factor = 1 + 0.002 * temp_diff
         
-        correction_factor = 1 + 0.002 * (actual_temp - base_temp)
-        
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.95, min(1.05, correction_factor))
     
     def calculate_pressure_correction(self, actual_pressure: float, base_pressure: float) -> float:
         """
@@ -69,49 +70,53 @@ class CorrectionFactors:
         Returns:
             压力修正因子
         """
-        # 基于Excel中的公式
-        # 公式: =1+2.3*(actual_pressure - base_pressure)/base_pressure
+        # 压力修正公式 - 基于超临界机组运行经验
+        pressure_ratio = safe_divide(actual_pressure, base_pressure, 1.0)
+        correction_factor = 1 + 2.3 * (pressure_ratio - 1.0)
         
-        if base_pressure == 0:
-            return 1.0
-        
-        correction_factor = 1 + 2.3 * (actual_pressure - base_pressure) / base_pressure
-        
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.98, min(1.02, correction_factor))
     
     def calculate_humidity_correction(self, actual_humidity: float, base_humidity: float) -> float:
         """
         计算湿度修正因子
         
         Args:
-            actual_humidity: 实际湿度(%).
-            base_humidity: 基准湿度(%).
+            actual_humidity: 实际湿度(%)
+            base_humidity: 基准湿度(%)
             
         Returns:
             湿度修正因子
         """
-        # 基于Excel中的公式
-        # 简化模型
-        correction_factor = 1 + 0.0001 * (actual_humidity - base_humidity)
+        # 湿度每变化10%，煤耗变化约0.1%
+        humidity_diff = actual_humidity - base_humidity
+        correction_factor = 1 + 0.0001 * humidity_diff
         
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.99, min(1.01, correction_factor))
     
     def calculate_heating_correction(self, heating_load: float, total_load: float) -> float:
         """
         计算供热修正因子
+        
+        Args:
+            heating_load: 供热负荷率(%)
+            total_load: 总负荷率(%)
+            
+        Returns:
+            供热修正因子
         """
-        if total_load == 0:
+        if total_load <= 0 or heating_load <= 0:
             return 1.0
         
-        # 修正供热修正因子的计算逻辑
-        if heating_load == 0:
-            return 1.0
+        # 供热比例
+        heating_ratio = safe_divide(heating_load, total_load, 0.0)
         
-        # 合理的供热修正因子范围应该在 0.8-1.2 之间
-        heating_ratio = heating_load / total_load
-        correction_factor = 1.0 - 0.2 * heating_ratio  # 简单的线性修正
+        # 供热会减少供电煤耗，因为部分热量用于供热而非发电
+        correction_factor = 1.0 - 0.3 * heating_ratio
         
-        return max(0.8, min(1.2, correction_factor))
+        # 确保修正因子在合理范围内
+        return max(0.7, min(1.0, correction_factor))
     
     def calculate_steam_parameter_correction(self, actual_steam_temp: float, actual_steam_pressure: float,
                                            base_steam_temp: float, base_steam_pressure: float) -> float:
@@ -127,18 +132,19 @@ class CorrectionFactors:
         Returns:
             蒸汽参数修正因子
         """
-        # 温度修正
-        temp_correction = 1 + 0.0001 * (actual_steam_temp - base_steam_temp)
+        # 温度修正 - 温度每变化10℃，煤耗变化约0.5%
+        temp_diff = actual_steam_temp - base_steam_temp
+        temp_correction = 1 + 0.0005 * temp_diff
         
         # 压力修正
-        if base_steam_pressure == 0:
-            pressure_correction = 1.0
-        else:
-            pressure_correction = 1 + 0.0002 * (actual_steam_pressure - base_steam_pressure)
+        pressure_ratio = safe_divide(actual_steam_pressure, base_steam_pressure, 1.0)
+        pressure_correction = 1 + 0.002 * (pressure_ratio - 1.0)
         
+        # 综合蒸汽参数修正因子
         correction_factor = temp_correction * pressure_correction
         
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.97, min(1.03, correction_factor))
     
     def calculate_fuel_correction(self, actual_calorific_value: float, base_calorific_value: float) -> float:
         """
@@ -151,85 +157,112 @@ class CorrectionFactors:
         Returns:
             燃料修正因子
         """
-        if base_calorific_value == 0:
-            return 1.0
+        # 发热量越高，煤耗越低
+        correction_factor = safe_divide(base_calorific_value, actual_calorific_value, 1.0)
         
-        # 将kcal/kg转换为kJ/kg (1 kcal = 4.1868 kJ)
-        actual_calorific_value_kj = actual_calorific_value * 4.1868
-        base_calorific_value_kj = base_calorific_value * 4.1868
-        
-        correction_factor = base_calorific_value_kj / actual_calorific_value_kj
-        
-        return correction_factor
+        # 确保修正因子在合理范围内
+        return max(0.8, min(1.2, correction_factor))
     
-    def calculate_comprehensive_correction(self, params: Dict[str, Any]) -> Dict[str, float]:
+    def calculate_sea_temperature_correction(self, actual_sea_temp: float, base_sea_temp: float) -> float:
+        """
+        计算海水温度修正因子
+        
+        Args:
+            actual_sea_temp: 实际海水温度(℃)
+            base_sea_temp: 基准海水温度(℃)
+            
+        Returns:
+            海水温度修正因子
+        """
+        # 海水温度每变化1℃，煤耗变化约0.15%
+        sea_temp_diff = actual_sea_temp - base_sea_temp
+        correction_factor = 1 + 0.0015 * sea_temp_diff
+        
+        # 确保修正因子在合理范围内
+        return max(0.98, min(1.02, correction_factor))
+    
+    def calculate_comprehensive_correction(self, params: Dict[str, Any], calculation_settings: Dict[str, Any]) -> Dict[str, float]:
         """
         计算综合修正因子
         
         Args:
             params: 参数字典
+            calculation_settings: 计算设置字典
             
         Returns:
             包含各种修正因子的字典
         """
-        corrections = {}
+        corrections = {
+            'load_factor': 1.0,
+            'temperature': 1.0,
+            'pressure': 1.0,
+            'humidity': 1.0,
+            'heating': 1.0,
+            'steam_parameter': 1.0,
+            'fuel': 1.0,
+            'sea_temperature': 1.0
+        }
         
-        # 负荷率修正
+        # 根据计算设置决定是否启用各种修正因子
+        if calculation_settings.get('enable_temperature_correction', True):
+            corrections['temperature'] = self.calculate_temperature_correction(
+                params.get('actual_temperature', params.get('base_temperature', 25)),
+                params.get('base_temperature', 25)
+            )
+        
+        if calculation_settings.get('enable_pressure_correction', True):
+            corrections['pressure'] = self.calculate_pressure_correction(
+                params.get('actual_pressure', params.get('base_pressure', 16.7)),
+                params.get('base_pressure', 16.7)
+            )
+        
+        if calculation_settings.get('enable_humidity_correction', True):
+            corrections['humidity'] = self.calculate_humidity_correction(
+                params.get('actual_humidity', params.get('base_humidity', 60)),
+                params.get('base_humidity', 60)
+            )
+        
+        if calculation_settings.get('enable_heating_correction', True):
+            corrections['heating'] = self.calculate_heating_correction(
+                params.get('heating_load', 0),
+                params.get('total_load', params.get('base_load', 100))
+            )
+        
+        if calculation_settings.get('enable_steam_parameter_correction', True):
+            corrections['steam_parameter'] = self.calculate_steam_parameter_correction(
+                params.get('actual_steam_temp', 540),
+                params.get('actual_steam_pressure', params.get('base_pressure', 16.7)),
+                params.get('base_steam_temp', 540),
+                params.get('base_steam_pressure', params.get('base_pressure', 16.7))
+            )
+        
+        if calculation_settings.get('enable_fuel_correction', True):
+            corrections['fuel'] = self.calculate_fuel_correction(
+                params.get('actual_calorific_value', params.get('coal_calorific_value', 4854)),
+                params.get('coal_calorific_value', 4854)
+            )
+        
+        # 海水温度修正
+        if calculation_settings.get('enable_sea_temperature_correction', False) and 'base_sea_temperature' in params:
+            corrections['sea_temperature'] = self.calculate_sea_temperature_correction(
+                params.get('actual_sea_temperature', params.get('base_sea_temperature', 19)),
+                params.get('base_sea_temperature', 19)
+            )
+        
+        # 负荷率修正总是启用
         corrections['load_factor'] = self.calculate_load_factor_correction(
             params.get('actual_load', params.get('base_load', 100)),
             params.get('base_load', 100)
         )
         
-        # 温度修正
-        corrections['temperature'] = self.calculate_temperature_correction(
-            params.get('actual_temperature', params.get('base_temperature', 25)),
-            params.get('base_temperature', 25)
-        )
-        
-        # 压力修正
-        corrections['pressure'] = self.calculate_pressure_correction(
-            params.get('actual_pressure', params.get('base_pressure', 16.7)),
-            params.get('base_pressure', 16.7)
-        )
-        
-        # 湿度修正
-        corrections['humidity'] = self.calculate_humidity_correction(
-            params.get('actual_humidity', params.get('base_humidity', 60)),
-            params.get('base_humidity', 60)
-        )
-        
-        # 供热修正
-        corrections['heating'] = self.calculate_heating_correction(
-            params.get('heating_load', 0),
-            params.get('total_load', params.get('base_load', 100))
-        )
-        
-        # 蒸汽参数修正
-        corrections['steam_parameter'] = self.calculate_steam_parameter_correction(
-            params.get('actual_steam_temp', 540),
-            params.get('actual_steam_pressure', params.get('base_pressure', 16.7)),
-            params.get('base_steam_temp', 540),
-            params.get('base_steam_pressure', params.get('base_pressure', 16.7))
-        )
-        
-        # 燃料修正
-        corrections['fuel'] = self.calculate_fuel_correction(
-            params.get('actual_calorific_value', params.get('coal_calorific_value', 29306)),
-            params.get('coal_calorific_value', 29306)
-        )
-        
         # 计算综合修正因子
         comprehensive_correction = 1.0
-        
-        # 对每个修正因子进行合理性检查
         for key, value in corrections.items():
-            # 确保修正因子在合理范围内
-            if key != 'heating':  # 供热修正因子已经单独处理
-                value = max(0.9, min(1.1, value))
-            comprehensive_correction *= value
+            if key != 'comprehensive':  # 避免重复计算
+                comprehensive_correction *= value
         
         # 确保综合修正因子在合理范围内
-        comprehensive_correction = max(0.8, min(1.2, comprehensive_correction))
+        comprehensive_correction = max(0.7, min(1.3, comprehensive_correction))
         
         corrections['comprehensive'] = comprehensive_correction
         
@@ -248,9 +281,14 @@ class CorrectionFactors:
         Returns:
             指数修正因子
         """
-        # 基于Excel中的指数函数模型
-        # 公式: =a + b*(1-EXP(-value/c))
-        
-        correction = a + b * (1 - math.exp(-value / c))
-        
-        return correction
+        try:
+            # 使用安全除法
+            value_div_c = safe_divide(value, c, 0.0)
+            correction = a + b * (1 - math.exp(-value_div_c))
+            return correction
+        except OverflowError:
+            # 处理指数计算溢出
+            return a + b
+        except Exception:
+            # 处理其他可能的错误
+            return a + b
