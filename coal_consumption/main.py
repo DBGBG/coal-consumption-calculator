@@ -379,14 +379,14 @@ def main():
     unit_2_term1 = 339 * unit_2_total_coeff
     print(f"3. 339 * 总煤耗影响系数: 339 * {unit_2_total_coeff:.4f} = {unit_2_term1:.2f}")
     
-    unit_2_term2 = 600 * 100 / unit_2_output
-    print(f"4. 600*100/机组发电量: 600 * 100 / {unit_2_output:.2f} = {unit_2_term2:.2f}")
+    # unit_2_term2 = 600 * 100 / unit_2_output
+    # print(f"4. 600*100/机组发电量: 600 * 100 / {unit_2_output:.2f} = {unit_2_term2:.2f}")
     
-    unit_2_term3 = 100 * 100 / unit_2_output
-    print(f"5. 100*100/机组发电量: 100 * 100 / {unit_2_output:.2f} = {unit_2_term3:.2f}")
+    # unit_2_term3 = 100 * 100 / unit_2_output
+    # print(f"5. 100*100/机组发电量: 100 * 100 / {unit_2_output:.2f} = {unit_2_term3:.2f}")
     
-    unit_2_monthly_basic_coal_consumption = unit_2_term1 + unit_2_term2 + unit_2_term3
-    print(f"6. 2号机组月度基本煤耗: {unit_2_term1:.2f} + {unit_2_term2:.2f} + {unit_2_term3:.2f} = {unit_2_monthly_basic_coal_consumption:.2f} g/kWh")
+    unit_2_monthly_basic_coal_consumption = unit_2_term1 
+    print(f"6. 2号机组月度基本煤耗: {unit_2_term1:.2f}  = {unit_2_monthly_basic_coal_consumption:.2f} g/kWh")
     
     print(f"\n基本煤耗: {basic_coal_consumption:.2f} g/kWh")
     print(f"1号机组月度基本煤耗: {unit_1_monthly_basic_coal_consumption:.2f} g/kWh")
